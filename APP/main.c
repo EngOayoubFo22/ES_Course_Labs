@@ -1,52 +1,65 @@
-//task2
+#include "../HAL/LED/LED_interface.h"
+#include "../MCAL/GPIO/GPIO_interface.h"
+#include "../MCAL/USART/USART_Interface.h"
 
-#include <stdint.h>
+#define MOTOR_PORT GPIO_PORTC
+#define MOTOR_PIN1  GPIO_PIN0
+#define MOTOR_PIN2  GPIO_PIN2
 
-#define LED_TRIS    TRISC0_bit
-#define LED_PIN     PORTC0_bit
+#define LED_PORT   GPIO_PORTC
+#define LED_PIN    GPIO_PIN1
 
-#define INT0_TRIS   TRISB0_bit
-
-volatile uint8_t g_int0_event = 0;
-
-void interrupt(void)
+static void Motor_Stop(void)
 {
-    if (INTCON.INTF)
+    GPIO_SetPinValue(MOTOR_PORT, MOTOR_PIN1, GPIO_LOW);
+    GPIO_SetPinValue(MOTOR_PORT, MOTOR_PIN2, GPIO_LOW);
+    LED_Off(LED_PORT, LED_PIN);
+}
+
+static void Motor_MoveForward(void)
+{
+    GPIO_SetPinValue(MOTOR_PORT, MOTOR_PIN1, GPIO_HIGH);
+    GPIO_SetPinValue(MOTOR_PORT, MOTOR_PIN2, GPIO_LOW);
+    LED_On(LED_PORT, LED_PIN);
+}
+
+static void App_HandleBluetoothCommand(u8 UART_Data)
+{
+    switch(UART_Data)
     {
-        INTCON.INTF = 0;
-        LED_PIN = !LED_PIN;
-        g_int0_event = 1;
+        case 'f':
+            Motor_MoveForward();
+        break;
+
+        case 's':
+            Motor_Stop();
+        break;
+
+        default:
+        break;
     }
 }
 
-static void INT0_Init(void)
+static void App_Init(void)
 {
-    INT0_TRIS = 1;
+    GPIO_Init();
+    GPIO_SetPinDirection(MOTOR_PORT, MOTOR_PIN1, GPIO_OUTPUT);
+    GPIO_SetPinDirection(MOTOR_PORT, MOTOR_PIN2, GPIO_OUTPUT);
+    LED_Init(LED_PORT, LED_PIN);
 
-    OPTION_REG &= 0x7F;
-    PORTB0_bit = 1;
+    Motor_Stop();
 
-    OPTION_REG.INTEDG = 0;
-
-    INTCON.INTF = 0;
-    INTCON.INTE = 1;
-    INTCON.GIE  = 1;
+    UART_Init();
+    UART_SetCallback(App_HandleBluetoothCommand);
 }
 
-void main(void)
+int main(void)
 {
-    LED_TRIS = 0;
-    LED_PIN  = 0;
-
-    INT0_Init();
+    App_Init();
 
     while(1)
     {
-        if (g_int0_event)
-        {
-            Delay_ms(150);
-            g_int0_event = 0;
-            INTCON.INTF = 0;
-        }
     }
+
+    return 0;
 }
